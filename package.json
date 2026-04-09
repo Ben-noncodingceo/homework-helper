@@ -12,6 +12,9 @@
     "db:migrate": "npx wrangler d1 migrations apply homework-helper",
     "db:migrate:local": "npx wrangler d1 migrations apply homework-helper --local"
   },
+  "dependencies": {
+    "hono": "^4.7.0"
+  },
   "devDependencies": {
     "concurrently": "^8.2.2",
     "wrangler": "^3.100.0"
