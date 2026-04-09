@@ -77,6 +77,7 @@ export function buildGeneratePrompt(params: GenerateParams): string {
 4. 解析要详细、清晰，有教学价值
 5. 按 easy → medium → hard 顺序排列
 6. 数学公式用 $...$ 包裹（单行公式），不要用 $$...$$
+7. 请参考${params.province}近年中考、高考真题的出题风格和难度水平
 
 现在请直接输出JSON数组：`;
 }

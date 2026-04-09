@@ -11,6 +11,16 @@ const DIFF_TABS: { key: Difficulty; label: string; color: string }[] = [
   { key: 'hard', label: '🔴 困难', color: 'text-red-700' },
 ];
 
+function getExamLabel(grade: string, province?: string): string {
+  const now = new Date();
+  const year = now.getMonth() < 6 ? now.getFullYear() - 1 : now.getFullYear();
+  const loc = province || '';
+  if (grade.includes('初三') || grade.includes('九年级')) return `基于${year}年${loc}中考题目改编`;
+  if (grade.includes('高三')) return `基于${year}年${loc}高考题目改编`;
+  if (grade.includes('高')) return `基于${year}年${loc}高中学业水平考试题目改编`;
+  return `基于${year}年${loc}期末考试题目改编`;
+}
+
 const TYPE_LABELS: Record<string, string> = {
   multiple_choice: '选择题',
   fill_blank: '填空题',
@@ -20,7 +30,7 @@ const TYPE_LABELS: Record<string, string> = {
   chart: '图表题',
 };
 
-function QuestionCard({ q, index, showAnswer }: { q: Question; index: number; showAnswer: boolean }) {
+function QuestionCard({ q, index, showAnswer, examLabel }: { q: Question; index: number; showAnswer: boolean; examLabel: string }) {
   return (
     <div className="question-card bg-white rounded-xl border border-gray-200 p-5 space-y-3">
       <div className="flex items-start gap-3">
@@ -31,6 +41,7 @@ function QuestionCard({ q, index, showAnswer }: { q: Question; index: number; sh
           <span className="text-xs font-medium text-gray-400 uppercase mr-2">
             {TYPE_LABELS[q.type] ?? q.type}
           </span>
+          <p className="text-[11px] text-gray-400 italic mb-1">{examLabel}</p>
           <MathText text={q.question} className="text-gray-900" />
         </div>
       </div>
@@ -83,6 +94,7 @@ export default function PreviewPage() {
   if (!hw) return null;
 
   const questions = hw[activeTab] ?? [];
+  const examLabel = getExamLabel(hw.grade, hw.province);
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
@@ -150,7 +162,7 @@ export default function PreviewPage() {
       ) : (
         <div className="space-y-4">
           {questions.map((q, i) => (
-            <QuestionCard key={q.id} q={q} index={i} showAnswer={showAnswers} />
+            <QuestionCard key={q.id} q={q} index={i} showAnswer={showAnswers} examLabel={examLabel} />
           ))}
         </div>
       )}

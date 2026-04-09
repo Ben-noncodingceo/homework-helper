@@ -29,4 +29,13 @@ export const api = {
 
   getHistory: (page = 1) =>
     request<{ items: HistoryItem[]; total: number }>(`/homework/history?page=${page}`),
+
+  chat: (req: {
+    question: string;
+    answer: string;
+    explanation: string;
+    userMessage: string;
+    history: { role: string; content: string }[];
+  }) =>
+    request<{ reply: string }>('/homework/chat', { method: 'POST', body: JSON.stringify(req) }),
 };

@@ -36,6 +36,7 @@ export interface HomeworkSet {
   subject: string;
   subjectId: string;
   grade: string;
+  province?: string;
   knowledgePoints: string[];
   questions: Question[];
   // stats
