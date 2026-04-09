@@ -1,4 +1,4 @@
-import { AppConfig, GenerateRequest, HomeworkSet, HistoryItem } from '../types';
+import { AppConfig, GenerateRequest, HomeworkSet, HistoryItem, Question } from '../types';
 import type { Subject } from '../types/subjects';
 
 const BASE = '/api';
@@ -25,17 +25,25 @@ export const api = {
   generate: (req: GenerateRequest) =>
     request<HomeworkSet>('/homework/generate', { method: 'POST', body: JSON.stringify(req) }),
 
+  generateBatch: (req: GenerateRequest & { difficulty: 'easy' | 'medium' | 'hard' }) =>
+    request<{ questions: Question[]; province: string }>('/homework/generate-batch', {
+      method: 'POST', body: JSON.stringify(req),
+    }),
+
+  saveHomework: (data: {
+    subject: string; subjectId: string; grade: string; province: string;
+    knowledgePoints: string[]; questions: Record<string, unknown>[];
+  }) =>
+    request<{ id: string }>('/homework/save', { method: 'POST', body: JSON.stringify(data) }),
+
   getHomework: (id: string) => request<HomeworkSet>(`/homework/${id}`),
 
   getHistory: (page = 1) =>
     request<{ items: HistoryItem[]; total: number }>(`/homework/history?page=${page}`),
 
   chat: (req: {
-    question: string;
-    answer: string;
-    explanation: string;
-    userMessage: string;
-    history: { role: string; content: string }[];
+    question: string; answer: string; explanation: string;
+    userMessage: string; history: { role: string; content: string }[];
   }) =>
     request<{ reply: string }>('/homework/chat', { method: 'POST', body: JSON.stringify(req) }),
 };

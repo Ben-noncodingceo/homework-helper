@@ -7,6 +7,137 @@ import { getSubject, getGradeLevel } from '../data/knowledgePoints';
 
 const app = new Hono<AppEnv>();
 
+/* ── Batch generate: one difficulty at a time ──────────── */
+
+app.post('/generate-batch', async (c) => {
+  const db = c.env.DB;
+  const body = await c.req.json<{
+    subjectId: string;
+    grade: string;
+    knowledgePointIds: string[];
+    questionTypes: string[];
+    counts: { easy: number; medium: number; hard: number };
+    difficulty: 'easy' | 'medium' | 'hard';
+  }>();
+
+  const { difficulty, subjectId, grade, knowledgePointIds, questionTypes, counts } = body;
+
+  if (!subjectId || !grade || !knowledgePointIds?.length || !questionTypes?.length) {
+    return c.json({ error: '参数不完整' }, 400);
+  }
+
+  const count = counts[difficulty] || 0;
+  if (count === 0) {
+    return c.json({ questions: [], province: '' });
+  }
+
+  const rawCfg = await getConfig(db);
+  const province = rawCfg['province'] || '广东省';
+  const city = rawCfg['city'] || '广州市';
+
+  const batchCounts = { easy: 0, medium: 0, hard: 0 };
+  batchCounts[difficulty] = count;
+
+  const params: GenerateParams = {
+    subjectId, grade, knowledgePointIds, questionTypes,
+    counts: batchCounts, province, city,
+  };
+
+  const primaryAI = await getAIConfig(db, 'primary');
+  const fallbackAI = await getAIConfig(db, 'fallback');
+
+  if (!primaryAI.apiKey && !fallbackAI.apiKey) {
+    return c.json({ error: '请先在设置页面配置 AI API Key' }, 400);
+  }
+
+  const prompt = buildGeneratePrompt(params);
+  const rawResponse = await callWithFallback(
+    primaryAI, fallbackAI,
+    [{ role: 'user', content: prompt }],
+    4000
+  );
+
+  const jsonStr = extractJSON(rawResponse);
+  let questions: Record<string, unknown>[];
+  try {
+    questions = JSON.parse(jsonStr);
+  } catch {
+    return c.json({ error: 'AI 返回格式解析失败，请重试', raw: rawResponse.slice(0, 500) }, 500);
+  }
+
+  if (!Array.isArray(questions)) {
+    return c.json({ error: 'AI 返回数据格式不正确' }, 500);
+  }
+
+  // Filter to requested difficulty only & enrich chart questions
+  questions = questions.filter((q) => q.difficulty === difficulty);
+
+  const multimodalAI = await getAIConfig(db, 'multimodal');
+  if (questionTypes.includes('chart') && multimodalAI.apiKey) {
+    for (const q of questions) {
+      if (q.type === 'chart' && !q.chart) {
+        try {
+          const chartPrompt = buildChartPrompt(params, String(q.question));
+          const chartRaw = await callAI(multimodalAI, [{ role: 'user', content: chartPrompt }], 1000);
+          q.chart = JSON.parse(extractJSON(chartRaw));
+        } catch { /* non-fatal */ }
+      }
+    }
+  }
+
+  questions.forEach((q, i) => {
+    if (!q.id) q.id = `${difficulty[0]}${i + 1}`;
+  });
+
+  return c.json({ questions, province });
+});
+
+/* ── Save completed homework ──────────────────────────── */
+
+app.post('/save', async (c) => {
+  const db = c.env.DB;
+  const body = await c.req.json<{
+    subject: string;
+    subjectId: string;
+    grade: string;
+    province: string;
+    knowledgePoints: string[];
+    questions: Record<string, unknown>[];
+  }>();
+
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const summary = `${body.subject} · ${body.grade}`;
+
+  const questions = body.questions;
+  const homeworkSet = {
+    id,
+    createdAt: now,
+    subject: body.subject,
+    subjectId: body.subjectId,
+    grade: body.grade,
+    province: body.province,
+    knowledgePoints: body.knowledgePoints,
+    questions,
+    easy: questions.filter((q) => q.difficulty === 'easy'),
+    medium: questions.filter((q) => q.difficulty === 'medium'),
+    hard: questions.filter((q) => q.difficulty === 'hard'),
+  };
+
+  await saveHomework(db, {
+    id,
+    created_at: now,
+    subject: body.subject,
+    grade: body.grade,
+    summary,
+    data: JSON.stringify(homeworkSet),
+  });
+
+  return c.json({ id });
+});
+
+/* ── Legacy full generate (kept for compatibility) ─────── */
+
 app.post('/generate', async (c) => {
   const db = c.env.DB;
   const body = await c.req.json<GenerateParams>();
@@ -31,12 +162,7 @@ app.post('/generate', async (c) => {
   }
 
   const prompt = buildGeneratePrompt(params);
-  const rawResponse = await callWithFallback(
-    primaryAI,
-    fallbackAI,
-    [{ role: 'user', content: prompt }],
-    6000
-  );
+  const rawResponse = await callWithFallback(primaryAI, fallbackAI, [{ role: 'user', content: prompt }], 6000);
 
   const jsonStr = extractJSON(rawResponse);
   let questions: Record<string, unknown>[];
@@ -50,7 +176,6 @@ app.post('/generate', async (c) => {
     return c.json({ error: 'AI 返回数据格式不正确' }, 500);
   }
 
-  // Enrich chart questions using multimodal AI (if configured)
   if (questionTypes.includes('chart') && multimodalAI.apiKey) {
     for (const q of questions) {
       if (q.type === 'chart' && !q.chart) {
@@ -58,16 +183,12 @@ app.post('/generate', async (c) => {
           const chartPrompt = buildChartPrompt(params, String(q.question));
           const chartRaw = await callAI(multimodalAI, [{ role: 'user', content: chartPrompt }], 1000);
           q.chart = JSON.parse(extractJSON(chartRaw));
-        } catch {
-          // non-fatal
-        }
+        } catch { /* non-fatal */ }
       }
     }
   }
 
-  questions.forEach((q, i) => {
-    if (!q.id) q.id = `q${i + 1}`;
-  });
+  questions.forEach((q, i) => { if (!q.id) q.id = `q${i + 1}`; });
 
   const subject = getSubject(subjectId);
   const gradeLevel = getGradeLevel(subjectId, grade);
@@ -80,44 +201,31 @@ app.post('/generate', async (c) => {
   const summary = `${subject?.name ?? subjectId} · ${gradeLevel?.label ?? grade} · ${kpNames}`;
 
   const homeworkSet = {
-    id,
-    createdAt: now,
-    subject: subject?.name ?? subjectId,
-    subjectId,
-    grade: gradeLevel?.label ?? grade,
-    province,
-    knowledgePoints: knowledgePointIds,
-    questions,
+    id, createdAt: now,
+    subject: subject?.name ?? subjectId, subjectId,
+    grade: gradeLevel?.label ?? grade, province,
+    knowledgePoints: knowledgePointIds, questions,
     easy: questions.filter((q) => q.difficulty === 'easy'),
     medium: questions.filter((q) => q.difficulty === 'medium'),
     hard: questions.filter((q) => q.difficulty === 'hard'),
   };
 
-  await saveHomework(db, {
-    id,
-    created_at: now,
-    subject: subject?.name ?? subjectId,
-    grade: gradeLevel?.label ?? grade,
-    summary,
-    data: JSON.stringify(homeworkSet),
-  });
-
+  await saveHomework(db, { id, created_at: now, subject: subject?.name ?? subjectId, grade: gradeLevel?.label ?? grade, summary, data: JSON.stringify(homeworkSet) });
   return c.json(homeworkSet);
 });
+
+/* ── AI Chat ───────────────────────────────────────────── */
 
 app.post('/chat', async (c) => {
   const db = c.env.DB;
   const body = await c.req.json<{
-    question: string;
-    answer: string;
-    explanation: string;
+    question: string; answer: string; explanation: string;
     userMessage: string;
     history: { role: 'user' | 'assistant'; content: string }[];
   }>();
 
   const primaryAI = await getAIConfig(db, 'primary');
   const fallbackAI = await getAIConfig(db, 'fallback');
-
   if (!primaryAI.apiKey && !fallbackAI.apiKey) {
     return c.json({ error: '请先配置 AI API Key' }, 400);
   }
@@ -145,6 +253,8 @@ ${body.explanation}
   const reply = await callWithFallback(primaryAI, fallbackAI, messages, 1000);
   return c.json({ reply });
 });
+
+/* ── Read ──────────────────────────────────────────────── */
 
 app.get('/history', async (c) => {
   const page = parseInt(c.req.query('page') || '1', 10);
