@@ -53,7 +53,7 @@ export interface GenerateRequest {
 }
 
 export interface AIRoleConfig {
-  provider: 'anthropic' | 'openai';
+  provider: string;
   apiKey: string;
   model: string;
   baseUrl: string;

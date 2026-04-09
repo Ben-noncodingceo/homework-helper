@@ -10,12 +10,18 @@ export interface Message {
   content: string;
 }
 
+/** Build API URL: if baseUrl already ends with /vN, append path directly; otherwise prepend /v1 */
+function buildUrl(baseUrl: string, path: string): string {
+  const base = baseUrl.replace(/\/+$/, '');
+  return /\/v\d+$/.test(base) ? `${base}${path}` : `${base}/v1${path}`;
+}
+
 async function callAnthropic(
   cfg: AIConfig,
   messages: Message[],
   maxTokens = 4096
 ): Promise<string> {
-  const url = `${cfg.baseUrl.replace(/\/$/, '')}/v1/messages`;
+  const url = buildUrl(cfg.baseUrl, '/messages');
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -38,7 +44,7 @@ async function callOpenAI(
   messages: Message[],
   maxTokens = 4096
 ): Promise<string> {
-  const url = `${cfg.baseUrl.replace(/\/$/, '')}/v1/chat/completions`;
+  const url = buildUrl(cfg.baseUrl, '/chat/completions');
   const res = await fetch(url, {
     method: 'POST',
     headers: {
