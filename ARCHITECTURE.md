@@ -19,7 +19,7 @@
 | 图表渲染 | Recharts |
 | 数学公式 | KaTeX (`$...$` 内联 LaTeX) |
 | 后端 | Node.js + Express + TypeScript |
-| 数据库 | better-sqlite3（本地文件 `data.sqlite`） |
+| 数据库 | @libsql/client（本地 SQLite 或 Turso 云数据库） |
 | AI 调用 | 原生 `fetch`，支持 Anthropic 协议和 OpenAI 兼容协议 |
 
 ---
@@ -28,10 +28,14 @@
 
 ```
 homework-helper/
+├── api/
+│   └── index.ts                  # Vercel Serverless 入口（导出 Express app）
+├── vercel.json                   # Vercel 部署配置
+├── .env.example                  # 环境变量示例
 ├── backend/
 │   ├── src/
-│   │   ├── index.ts              # Express 入口，端口 3001
-│   │   ├── db.ts                 # SQLite 连接、建表、CRUD helpers
+│   │   ├── index.ts              # Express 入口，端口 3001（导出 app 供 serverless 使用）
+│   │   ├── db.ts                 # LibSQL/Turso 连接、建表、CRUD helpers
 │   │   ├── data/
 │   │   │   └── knowledgePoints.ts  # 所有学科/年级/知识点静态数据
 │   │   ├── services/
@@ -191,6 +195,57 @@ npm start
 ```
 
 访问 http://localhost:5173（dev）或 http://localhost:3001（prod）
+
+---
+
+## 部署到 Vercel
+
+### 前置准备
+
+1. **创建 Turso 数据库**（免费）：
+   ```bash
+   # 安装 Turso CLI
+   curl -sSfL https://get.tur.so/install.sh | bash
+
+   # 注册 & 登录
+   turso auth signup   # 或 turso auth login
+
+   # 创建数据库
+   turso db create homework-helper
+
+   # 获取连接信息
+   turso db show homework-helper --url        # → libsql://xxx.turso.io
+   turso db tokens create homework-helper      # → eyJhbGci...
+   ```
+
+2. **部署到 Vercel**：
+   ```bash
+   # 安装 Vercel CLI
+   npm i -g vercel
+
+   # 在项目根目录
+   vercel
+   ```
+
+3. **配置环境变量**（Vercel Dashboard → Settings → Environment Variables）：
+   | 变量 | 值 |
+   |---|---|
+   | `DATABASE_URL` | `libsql://your-db.turso.io` |
+   | `DATABASE_AUTH_TOKEN` | Turso 生成的 token |
+
+4. **重新部署**：
+   ```bash
+   vercel --prod
+   ```
+
+### 部署到 Cloudflare Pages（替代方案）
+
+如需部署到 Cloudflare，需要额外改造：
+- 将 Express 替换为 Hono（Cloudflare Workers 兼容）
+- 使用 Cloudflare D1 替代 Turso（或 Turso 也可与 Workers 配合）
+- 配置 `wrangler.toml`
+
+当前代码已兼容 Vercel，Cloudflare 方案需要更多改动。
 
 ---
 

@@ -1,71 +1,83 @@
-import Database from 'better-sqlite3';
-import path from 'path';
+import { createClient, type Client } from '@libsql/client';
 
-const DB_PATH = path.join(__dirname, '..', 'data.sqlite');
+let _client: Client | null = null;
+let _initPromise: Promise<void> | null = null;
 
-let _db: Database.Database | null = null;
-
-export function getDb(): Database.Database {
-  if (_db) return _db;
-  _db = new Database(DB_PATH);
-  _db.pragma('journal_mode = WAL');
-  initSchema(_db);
-  return _db;
+function getClient(): Client {
+  if (_client) return _client;
+  _client = createClient({
+    url: process.env.DATABASE_URL || 'file:data.sqlite',
+    authToken: process.env.DATABASE_AUTH_TOKEN || undefined,
+  });
+  return _client;
 }
 
-function initSchema(db: Database.Database) {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS config (
-      key   TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    );
+async function ensureSchema(): Promise<void> {
+  if (_initPromise) return _initPromise;
+  _initPromise = (async () => {
+    const client = getClient();
+    await client.executeMultiple(`
+      CREATE TABLE IF NOT EXISTS config (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS homework (
+        id         TEXT PRIMARY KEY,
+        created_at TEXT NOT NULL,
+        subject    TEXT NOT NULL,
+        grade      TEXT NOT NULL,
+        summary    TEXT NOT NULL,
+        data       TEXT NOT NULL
+      );
+    `);
 
-    CREATE TABLE IF NOT EXISTS homework (
-      id         TEXT PRIMARY KEY,
-      created_at TEXT NOT NULL,
-      subject    TEXT NOT NULL,
-      grade      TEXT NOT NULL,
-      summary    TEXT NOT NULL,
-      data       TEXT NOT NULL
-    );
-  `);
-
-  // Defaults for 3 AI roles: primary (主力), fallback (备选), multimodal (多模态)
-  const defaults: Record<string, string> = {
-    'ai.primary.provider': 'anthropic',
-    'ai.primary.apiKey': '',
-    'ai.primary.model': 'claude-opus-4-5',
-    'ai.primary.baseUrl': 'https://api.anthropic.com',
-    'ai.fallback.provider': 'openai',
-    'ai.fallback.apiKey': '',
-    'ai.fallback.model': 'gpt-4o',
-    'ai.fallback.baseUrl': 'https://api.openai.com',
-    'ai.multimodal.provider': 'anthropic',
-    'ai.multimodal.apiKey': '',
-    'ai.multimodal.model': 'claude-opus-4-5',
-    'ai.multimodal.baseUrl': 'https://api.anthropic.com',
-    province: '广东省',
-    city: '广州市',
-  };
-  const ins = db.prepare('INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)');
-  for (const [k, v] of Object.entries(defaults)) ins.run(k, v);
+    const defaults: Record<string, string> = {
+      'ai.primary.provider': 'anthropic',
+      'ai.primary.apiKey': '',
+      'ai.primary.model': 'claude-opus-4-5',
+      'ai.primary.baseUrl': 'https://api.anthropic.com',
+      'ai.fallback.provider': 'openai',
+      'ai.fallback.apiKey': '',
+      'ai.fallback.model': 'gpt-4o',
+      'ai.fallback.baseUrl': 'https://api.openai.com',
+      'ai.multimodal.provider': 'anthropic',
+      'ai.multimodal.apiKey': '',
+      'ai.multimodal.model': 'claude-opus-4-5',
+      'ai.multimodal.baseUrl': 'https://api.anthropic.com',
+      province: '广东省',
+      city: '广州市',
+    };
+    for (const [k, v] of Object.entries(defaults)) {
+      await client.execute({
+        sql: 'INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)',
+        args: [k, v],
+      });
+    }
+  })();
+  return _initPromise;
 }
 
-export function getConfig(): Record<string, string> {
-  const rows = getDb()
-    .prepare('SELECT key, value FROM config')
-    .all() as { key: string; value: string }[];
-  return Object.fromEntries(rows.map((r) => [r.key, r.value]));
+async function db(): Promise<Client> {
+  await ensureSchema();
+  return getClient();
 }
 
-export function setConfig(key: string, value: string) {
-  getDb()
-    .prepare('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)')
-    .run(key, value);
+export async function getConfig(): Promise<Record<string, string>> {
+  const client = await db();
+  const result = await client.execute('SELECT key, value FROM config');
+  return Object.fromEntries(result.rows.map((r) => [String(r.key), String(r.value)]));
 }
 
-export function getAIConfig(role: 'primary' | 'fallback' | 'multimodal') {
-  const cfg = getConfig();
+export async function setConfig(key: string, value: string): Promise<void> {
+  const client = await db();
+  await client.execute({
+    sql: 'INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)',
+    args: [key, value],
+  });
+}
+
+export async function getAIConfig(role: 'primary' | 'fallback' | 'multimodal') {
+  const cfg = await getConfig();
   return {
     provider: cfg[`ai.${role}.provider`] || 'anthropic',
     apiKey: cfg[`ai.${role}.apiKey`] || '',
@@ -74,42 +86,47 @@ export function getAIConfig(role: 'primary' | 'fallback' | 'multimodal') {
   };
 }
 
-export function saveHomework(record: {
+export async function saveHomework(record: {
   id: string;
   created_at: string;
   subject: string;
   grade: string;
   summary: string;
   data: string;
-}) {
-  getDb()
-    .prepare(
-      'INSERT INTO homework (id, created_at, subject, grade, summary, data) VALUES (?, ?, ?, ?, ?, ?)'
-    )
-    .run(record.id, record.created_at, record.subject, record.grade, record.summary, record.data);
+}): Promise<void> {
+  const client = await db();
+  await client.execute({
+    sql: 'INSERT INTO homework (id, created_at, subject, grade, summary, data) VALUES (?, ?, ?, ?, ?, ?)',
+    args: [record.id, record.created_at, record.subject, record.grade, record.summary, record.data],
+  });
 }
 
-export function getHomeworkById(id: string): { data: string } | undefined {
-  return getDb()
-    .prepare('SELECT data FROM homework WHERE id = ?')
-    .get(id) as { data: string } | undefined;
+export async function getHomeworkById(id: string): Promise<{ data: string } | undefined> {
+  const client = await db();
+  const result = await client.execute({
+    sql: 'SELECT data FROM homework WHERE id = ?',
+    args: [id],
+  });
+  if (result.rows.length === 0) return undefined;
+  return { data: String(result.rows[0].data) };
 }
 
-export function listHomework(page = 1, limit = 20) {
-  const offset = (page - 1) * limit;
-  const items = getDb()
-    .prepare(
-      'SELECT id, created_at, subject, grade, summary FROM homework ORDER BY created_at DESC LIMIT ? OFFSET ?'
-    )
-    .all(limit, offset) as {
-    id: string;
-    created_at: string;
-    subject: string;
-    grade: string;
-    summary: string;
-  }[];
-  const { cnt } = getDb()
-    .prepare('SELECT COUNT(*) as cnt FROM homework')
-    .get() as { cnt: number };
-  return { items, total: cnt };
+export async function listHomework(page = 1, limit = 20) {
+  const client = await db();
+  const items = await client.execute({
+    sql: 'SELECT id, created_at, subject, grade, summary FROM homework ORDER BY created_at DESC LIMIT ? OFFSET ?',
+    args: [limit, (page - 1) * limit],
+  });
+  const countResult = await client.execute('SELECT COUNT(*) as cnt FROM homework');
+  const cnt = Number(countResult.rows[0].cnt);
+  return {
+    items: items.rows.map((r) => ({
+      id: String(r.id),
+      created_at: String(r.created_at),
+      subject: String(r.subject),
+      grade: String(r.grade),
+      summary: String(r.summary),
+    })),
+    total: cnt,
+  };
 }

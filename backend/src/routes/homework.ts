@@ -16,15 +16,15 @@ router.post('/generate', async (req: Request, res: Response) => {
       return res.status(400).json({ error: '参数不完整' });
     }
 
-    const rawCfg = getConfig();
+    const rawCfg = await getConfig();
     const province = rawCfg['province'] || '广东省';
     const city = rawCfg['city'] || '广州市';
 
     const params: GenerateParams = { subjectId, grade, knowledgePointIds, questionTypes, counts, province, city };
 
-    const primaryAI = getAIConfig('primary');
-    const fallbackAI = getAIConfig('fallback');
-    const multimodalAI = getAIConfig('multimodal');
+    const primaryAI = await getAIConfig('primary');
+    const fallbackAI = await getAIConfig('fallback');
+    const multimodalAI = await getAIConfig('multimodal');
 
     if (!primaryAI.apiKey && !fallbackAI.apiKey) {
       return res.status(400).json({ error: '请先在设置页面配置 AI API Key' });
@@ -96,7 +96,7 @@ router.post('/generate', async (req: Request, res: Response) => {
       hard: questions.filter((q) => q.difficulty === 'hard'),
     };
 
-    saveHomework({
+    await saveHomework({
       id,
       created_at: now,
       subject: subject?.name ?? subjectId,
@@ -112,19 +112,23 @@ router.post('/generate', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/history', (req: Request, res: Response) => {
-  const page = parseInt(String(req.query.page || '1'), 10);
-  const result = listHomework(page, 20);
-  res.json(result);
+router.get('/history', async (req: Request, res: Response) => {
+  try {
+    const page = parseInt(String(req.query.page || '1'), 10);
+    const result = await listHomework(page, 20);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
 });
 
-router.get('/:id', (req: Request, res: Response) => {
-  const record = getHomeworkById(req.params.id);
-  if (!record) return res.status(404).json({ error: '未找到' });
+router.get('/:id', async (req: Request, res: Response) => {
   try {
+    const record = await getHomeworkById(req.params.id);
+    if (!record) return res.status(404).json({ error: '未找到' });
     return res.json(JSON.parse(record.data));
-  } catch {
-    return res.status(500).json({ error: '数据损坏' });
+  } catch (err) {
+    return res.status(500).json({ error: (err as Error).message });
   }
 });
 
