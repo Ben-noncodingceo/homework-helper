@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../types';
 import { getConfig, getAIConfig, saveHomework, getHomeworkById, listHomework } from '../db';
-import { callWithFallback, callAI, extractJSON } from '../services/aiClient';
-import { buildGeneratePrompt, buildChartPrompt, GenerateParams } from '../services/promptBuilder';
+import { callWithFallback, callAI, extractJSON, extractSvg } from '../services/aiClient';
+import { buildGeneratePrompt, buildChartPrompt, buildSvgPrompt, GenerateParams } from '../services/promptBuilder';
 import { getSubject, getGradeLevel } from '../data/knowledgePoints';
 
 const app = new Hono<AppEnv>();
@@ -88,6 +88,25 @@ app.post('/generate-batch', async (c) => {
   questions.forEach((q, i) => {
     if (!q.id) q.id = `${difficulty[0]}${i + 1}`;
   });
+
+  // Enrich with SVG diagrams for questions that reference figures
+  const svgAI = multimodalAI.apiKey ? multimodalAI : (primaryAI.apiKey ? primaryAI : fallbackAI);
+  if (svgAI.apiKey) {
+    for (const q of questions) {
+      if (q.svg) continue; // already has SVG
+      const text = String(q.question || '');
+      const chartDesc = (q.chart as Record<string, unknown> | null)?.description as string | undefined;
+      const needsSvg = /如图|图中|示意图|下图|图示/.test(text)
+        || (q.chart && (q.chart as Record<string, unknown>).type === 'geometry');
+      if (!needsSvg) continue;
+      try {
+        const svgPrompt = buildSvgPrompt(text, chartDesc);
+        const svgRaw = await callAI(svgAI, [{ role: 'user', content: svgPrompt }], 2000);
+        const svg = extractSvg(svgRaw);
+        if (svg) q.svg = svg;
+      } catch { /* non-fatal, question still works without diagram */ }
+    }
+  }
 
   return c.json({ questions, province });
 });
@@ -189,6 +208,24 @@ app.post('/generate', async (c) => {
   }
 
   questions.forEach((q, i) => { if (!q.id) q.id = `q${i + 1}`; });
+
+  // SVG enrichment for legacy endpoint
+  const legacySvgAI = multimodalAI.apiKey ? multimodalAI : (primaryAI.apiKey ? primaryAI : fallbackAI);
+  if (legacySvgAI.apiKey) {
+    for (const q of questions) {
+      if (q.svg) continue;
+      const text = String(q.question || '');
+      const chartDesc = (q.chart as Record<string, unknown> | null)?.description as string | undefined;
+      const needsSvg = /如图|图中|示意图|下图|图示/.test(text)
+        || (q.chart && (q.chart as Record<string, unknown>).type === 'geometry');
+      if (!needsSvg) continue;
+      try {
+        const svgRaw = await callAI(legacySvgAI, [{ role: 'user', content: buildSvgPrompt(text, chartDesc) }], 2000);
+        const svg = extractSvg(svgRaw);
+        if (svg) q.svg = svg;
+      } catch { /* non-fatal */ }
+    }
+  }
 
   const subject = getSubject(subjectId);
   const gradeLevel = getGradeLevel(subjectId, grade);

@@ -3,14 +3,16 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
 import { ChartData } from '../../types';
+import SvgDiagram from './SvgDiagram';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
 interface Props {
   data: ChartData;
+  svg?: string | null;
 }
 
-export default function ChartRenderer({ data }: Props) {
+export default function ChartRenderer({ data, svg }: Props) {
   if (!data) return null;
 
   if (data.type === 'table') {
@@ -45,6 +47,7 @@ export default function ChartRenderer({ data }: Props) {
   }
 
   if (data.type === 'geometry') {
+    if (svg) return <SvgDiagram svg={svg} />;
     return (
       <div className="my-3 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
         <span className="font-semibold">图形说明：</span> {data.description}

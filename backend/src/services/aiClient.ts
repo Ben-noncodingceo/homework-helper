@@ -89,6 +89,16 @@ export async function callWithFallback(
   }
 }
 
+/** Extract SVG from AI response (may be wrapped in markdown code fences). */
+export function extractSvg(raw: string): string {
+  // Try markdown code block first
+  const fenced = raw.match(/```(?:svg|xml|html)?\s*([\s\S]*?)```/);
+  const content = fenced ? fenced[1].trim() : raw.trim();
+  // Extract <svg>...</svg>
+  const svgMatch = content.match(/<svg[\s\S]*<\/svg>/i);
+  return svgMatch ? svgMatch[0] : '';
+}
+
 /** Extract JSON from possibly-markdown-wrapped AI response. */
 export function extractJSON(raw: string): string {
   // strip ```json ... ``` fences

@@ -82,6 +82,26 @@ export function buildGeneratePrompt(params: GenerateParams): string {
 现在请直接输出JSON数组：`;
 }
 
+export function buildSvgPrompt(questionText: string, description?: string): string {
+  const context = description
+    ? `题目：${questionText}\n已有描述：${description}`
+    : `题目：${questionText}`;
+
+  return `你是一位教育插图设计师。请为以下题目生成一个清晰精确的 SVG 示意图。
+
+${context}
+
+严格要求（违反任何一条都不合格）：
+1. 只返回纯 <svg>...</svg> 代码，前后不要有任何其他文字、解释或 markdown 标记
+2. 使用 viewBox="0 0 400 250"，宽高比 8:5
+3. 只用基本元素：rect, circle, ellipse, line, polyline, polygon, path, text, g, defs, marker
+4. 箭头用 <marker> + <line marker-end> 实现
+5. 文字标注：font-family="sans-serif" font-size="14"
+6. 配色：主体 #333，红色标注 #e74c3c，蓝色标注 #3498db，辅助线 #aaa（虚线）
+7. 不使用 image、foreignObject、script、style、animate 标签
+8. 确保图形内容与题目精确对应，标注所有关键信息（力的方向、N/S极、角度、长度等）`;
+}
+
 export function buildChartPrompt(params: GenerateParams, questionText: string): string {
   const subject = getSubject(params.subjectId);
   const subjectName = subject?.name ?? params.subjectId;

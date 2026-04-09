@@ -23,6 +23,7 @@ export interface Question {
   type: QuestionType;
   difficulty: Difficulty;
   question: string; // may contain $LaTeX$ inline
+  svg?: string | null; // SVG diagram for physics/geometry questions
   chart?: ChartData | null;
   options?: string[] | null; // ['A. ...', 'B. ...', 'C. ...', 'D. ...']
   answer: string;

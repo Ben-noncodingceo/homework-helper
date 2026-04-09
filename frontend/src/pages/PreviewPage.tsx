@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { HomeworkSet, Question, Difficulty, GenerateRequest } from '../types';
 import MathText from '../components/ui/MathText';
 import ChartRenderer from '../components/ui/ChartRenderer';
+import SvgDiagram from '../components/ui/SvgDiagram';
 
 const DIFF_TABS: { key: Difficulty; label: string }[] = [
   { key: 'easy', label: '🟢 简单' },
@@ -39,7 +40,8 @@ function QuestionCard({ q, index, showAnswer, examLabel }: { q: Question; index:
           <MathText text={q.question} className="text-gray-900" />
         </div>
       </div>
-      {q.chart && <ChartRenderer data={q.chart} />}
+      {q.svg && !q.chart && <SvgDiagram svg={q.svg} />}
+      {q.chart && <ChartRenderer data={q.chart} svg={q.svg} />}
       {q.options && (
         <div className="ml-10 space-y-1">
           {q.options.map((opt, i) => (

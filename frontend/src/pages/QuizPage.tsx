@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { HomeworkSet, Question } from '../types';
 import MathText from '../components/ui/MathText';
 import ChartRenderer from '../components/ui/ChartRenderer';
+import SvgDiagram from '../components/ui/SvgDiagram';
 import FishSlot from '../components/ui/FishSlot';
 import LoadingOverlay from '../components/ui/LoadingOverlay';
 
@@ -287,7 +288,8 @@ export default function QuizPage() {
           <MathText text={q.question} />
         </div>
 
-        {q.chart && <ChartRenderer data={q.chart} />}
+        {q.svg && !q.chart && <SvgDiagram svg={q.svg} />}
+        {q.chart && <ChartRenderer data={q.chart} svg={q.svg} />}
 
         {/* Multiple Choice */}
         {q.type === 'multiple_choice' && q.options && (
