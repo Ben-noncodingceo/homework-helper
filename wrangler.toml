@@ -6,4 +6,4 @@ pages_build_output_dir = "frontend/dist"
 [[d1_databases]]
 binding = "DB"
 database_name = "homework-helper"
-database_id = ""  # 部署时填入: npx wrangler d1 create homework-helper
+database_id = "e78c453b-14e8-4644-ad2f-79f786a35543"
