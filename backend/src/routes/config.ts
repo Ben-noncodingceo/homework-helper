@@ -1,11 +1,12 @@
-import { Router, Request, Response } from 'express';
+import { Hono } from 'hono';
+import type { AppEnv } from '../types';
 import { getConfig, setConfig } from '../db';
 
-const router = Router();
+const app = new Hono<AppEnv>();
 
-router.get('/', (_req: Request, res: Response) => {
-  const raw = getConfig();
-  // Shape into nested object for frontend
+app.get('/', async (c) => {
+  const db = c.env.DB;
+  const raw = await getConfig(db);
   const cfg = {
     primary: {
       provider: raw['ai.primary.provider'] || 'anthropic',
@@ -28,24 +29,25 @@ router.get('/', (_req: Request, res: Response) => {
     province: raw['province'] || '广东省',
     city: raw['city'] || '广州市',
   };
-  res.json(cfg);
+  return c.json(cfg);
 });
 
-router.post('/', (req: Request, res: Response) => {
-  const body = req.body as Record<string, Record<string, string> | string>;
+app.post('/', async (c) => {
+  const db = c.env.DB;
+  const body = await c.req.json<Record<string, Record<string, string> | string>>();
   const roles = ['primary', 'fallback', 'multimodal'] as const;
   for (const role of roles) {
     const roleData = body[role] as Record<string, string> | undefined;
     if (roleData) {
-      if (roleData.provider !== undefined) setConfig(`ai.${role}.provider`, roleData.provider);
-      if (roleData.apiKey !== undefined) setConfig(`ai.${role}.apiKey`, roleData.apiKey);
-      if (roleData.model !== undefined) setConfig(`ai.${role}.model`, roleData.model);
-      if (roleData.baseUrl !== undefined) setConfig(`ai.${role}.baseUrl`, roleData.baseUrl);
+      if (roleData.provider !== undefined) await setConfig(db, `ai.${role}.provider`, roleData.provider);
+      if (roleData.apiKey !== undefined) await setConfig(db, `ai.${role}.apiKey`, roleData.apiKey);
+      if (roleData.model !== undefined) await setConfig(db, `ai.${role}.model`, roleData.model);
+      if (roleData.baseUrl !== undefined) await setConfig(db, `ai.${role}.baseUrl`, roleData.baseUrl);
     }
   }
-  if (typeof body.province === 'string') setConfig('province', body.province);
-  if (typeof body.city === 'string') setConfig('city', body.city);
-  res.json({ ok: true });
+  if (typeof body.province === 'string') await setConfig(db, 'province', body.province);
+  if (typeof body.city === 'string') await setConfig(db, 'city', body.city);
+  return c.json({ ok: true });
 });
 
-export default router;
+export default app;

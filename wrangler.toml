@@ -1,0 +1,9 @@
+name = "homework-helper"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "frontend/dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "homework-helper"
+database_id = ""  # 部署时填入: npx wrangler d1 create homework-helper
