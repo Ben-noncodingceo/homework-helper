@@ -3,12 +3,17 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently -n \"backend,frontend\" -c \"bgBlue.bold,bgGreen.bold\" \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
-    "build": "npm run build --prefix frontend && npm run build --prefix backend",
-    "start": "npm run start --prefix backend",
-    "install:all": "npm install && npm install --prefix backend && npm install --prefix frontend"
+    "dev": "concurrently -n \"frontend,worker\" -c \"bgGreen.bold,bgBlue.bold\" \"npm run dev --prefix frontend\" \"npx wrangler pages dev --proxy=5173\"",
+    "build": "npm run build --prefix frontend",
+    "deploy": "npm run build && npx wrangler pages deploy frontend/dist",
+    "install:all": "npm install && npm install --prefix backend && npm install --prefix frontend",
+    "typecheck": "npm run typecheck --prefix backend && cd frontend && npx tsc --noEmit",
+    "db:create": "npx wrangler d1 create homework-helper",
+    "db:migrate": "npx wrangler d1 migrations apply homework-helper",
+    "db:migrate:local": "npx wrangler d1 migrations apply homework-helper --local"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "wrangler": "^3.100.0"
   }
 }

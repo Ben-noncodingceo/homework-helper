@@ -1,10 +1,11 @@
-import { Router } from 'express';
+import { Hono } from 'hono';
+import type { AppEnv } from '../types';
 import SUBJECTS from '../data/knowledgePoints';
 
-const router = Router();
+const app = new Hono<AppEnv>();
 
-router.get('/', (_req, res) => {
-  res.json(SUBJECTS);
+app.get('/', (c) => {
+  return c.json(SUBJECTS);
 });
 
-export default router;
+export default app;
