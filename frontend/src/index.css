@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Fish slot animation ─────────────────────────────────── */
+@keyframes fishRoll {
+  0%   { transform: translateY(0); }
+  100% { transform: translateY(calc(-1em * 6)); }
+}
+
+.fish-slot {
+  display: inline-block;
+  width: 1.1em;
+  height: 1.1em;
+  overflow: hidden;
+  vertical-align: text-bottom;
+  line-height: 1;
+  font-size: inherit;
+}
+
+.fish-track {
+  display: flex;
+  flex-direction: column;
+  animation: fishRoll 4.2s steps(6, end) infinite;
+  line-height: 1.1;
+}
+
+.fish-item {
+  height: 1.1em;
+  flex-shrink: 0;
+  display: block;
+  text-align: center;
+}
+
+/* ── Loading dots ────────────────────────────────────────── */
+@keyframes loadingDot {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+.loading-dot {
+  animation: loadingDot 1.4s ease-in-out infinite;
+}
+.loading-dot:nth-child(2) { animation-delay: 0.2s; }
+.loading-dot:nth-child(3) { animation-delay: 0.4s; }
+
+/* ── Print styles ────────────────────────────────────────── */
+@media print {
+  .no-print { display: none !important; }
+  .print-only { display: block !important; }
+
+  body { font-size: 12pt; color: #000; }
+  .page-break { page-break-before: always; }
+
+  .question-card {
+    border: none !important;
+    box-shadow: none !important;
+    page-break-inside: avoid;
+  }
+}
+
+.print-only { display: none; }
+
+/* ── KaTeX inline fix ────────────────────────────────────── */
+.katex { font-size: 1em !important; }
